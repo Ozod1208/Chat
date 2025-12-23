@@ -39,7 +39,7 @@ app.post('/signup', (req, res) => {
     }
     let int = generator();
     while (acc.find(a => a.id === int) || Number(int) < 10000000) int = generator();
-    acc.push({ ...req.body, id: int, chat: 'false' });
+    acc.push({ ...req.body, id: int, chat: 'true' });
     writeData(acc, DATA_FILE_1);
     res.json({ status: 'ok', message: `Yangi hisob ochildi (id = ${int})` });
 });
@@ -136,3 +136,4 @@ wss.on('connection', socket => {
 // Render port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
