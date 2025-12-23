@@ -104,6 +104,20 @@ app.post('/deleteuser', (req, res) => {
     res.json({ status: 'ok', message: `Hisob o'chirildi!` });
 });
 
+app.post('/deletechat', (req, res) => {
+    const { adminUser, adminPass } = req.body;
+    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+    data = [
+      {
+            "username": "@Ozod_Tirkachev",
+            "message": "Chat yangilandi!",
+            "time": "15:09:28 | 23-Dec-2025"
+      }
+        ]
+    writeData(data, DATA_FILE_2);
+    res.json({ status: 'ok', message: `Chat yangilandi!` });
+});
+
 // ================== HTTP + WebSocket ==================
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
@@ -136,4 +150,5 @@ wss.on('connection', socket => {
 // Render port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
