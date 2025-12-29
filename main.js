@@ -153,5 +153,12 @@ wss.on('connection', socket => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
+// Self-ping for not sleep
 
+setInterval(() => {
+  http.get('https://real-server-url.onrender.com', res => {
+    console.log('Server pinged at', new Date(), 'Status:', res.statusCode);
+  }).on('error', err => console.log('Ping error:', err.message));
+}, 30000);
 
+// Created by Ozod Tirkachev
