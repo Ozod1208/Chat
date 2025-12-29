@@ -30,7 +30,7 @@ function generator() { let n = Math.round(Math.random() * 100000000); return Str
 // Get chat
 app.get('/chat', (req, res) => { res.json(readData(DATA_FILE_2)); });
 
-app.get('get', (req, res) => { res.json({status: 'ok'}) };
+app.get('/get', (req, res) => { res.json({status: 'ok'}) });
 
 // Signup
 app.post('/signup', (req, res) => {
@@ -162,3 +162,4 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
