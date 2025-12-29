@@ -112,9 +112,9 @@ app.post('/deletechat', (req, res) => {
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
     data = [
       {
-            "username": "@Ozod_Tirkachev",
+            "username": "@Consructor",
             "message": "Chat yangilandi!",
-            "time": "15:09:28 | 23-Dec-2025"
+            "time": "00:00:01 | 1-Dec-2025"
       }
         ]
     writeData(data, DATA_FILE_2);
@@ -163,6 +163,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
