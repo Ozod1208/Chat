@@ -30,6 +30,8 @@ function generator() { let n = Math.round(Math.random() * 100000000); return Str
 // Get chat
 app.get('/chat', (req, res) => { res.json(readData(DATA_FILE_2)); });
 
+app.get('get', (req, res) => { res.json({status: 'ok'}) };
+
 // Signup
 app.post('/signup', (req, res) => {
     const { username, password } = req.body;
@@ -150,5 +152,6 @@ wss.on('connection', socket => {
 // Render port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
 
