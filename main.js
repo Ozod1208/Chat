@@ -5,6 +5,7 @@ const ws = require('ws');
 const cors = require('cors');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 
 const app = express();
 app.use(cors());
@@ -156,11 +157,12 @@ server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 // Self-ping for not sleep
 
 setInterval(() => {
-  http.get('https://chat-uyma.onrender.com/get', res => {
+  https.get('https://chat-uyma.onrender.com/get', res => {
     console.log('Server pinged at', new Date(), 'Status:', res.statusCode);
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
