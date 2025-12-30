@@ -77,6 +77,27 @@ app.post('/readchat', (req, res) => {
 });
 
 // ================== Admin REST API ==================
+app.post('/appenduser', (req, res) => {
+    const { adminUser, adminPass, newUsername, newPassword, newId, newChat } = req.body;
+    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+    let acc = readData(DATA_FILE_1)
+    user = {
+        username: newUsername,
+        password: newPassword,
+        id: newId,
+        chat: newChat
+    }
+    if ((newUsername === '' || newUsername === null) || (newPassword === '' || newPassword === null)) 
+        return res.json({status: 'error', message: "Ma'lumot noto'g'ri"})
+    if (user.id === '' || user.id === null) 
+        user.id = generator()
+    if (user.chat === '' || user.chat === null)
+        user.chat = 'true'
+    acc.push(...user)
+    writeData(acc, DATA_FILE_1)
+    res.json({status: 'ok', message: `Xisob ochildi: \n ${user.username}  |  ${user.password}  |  ${user.id}  |  ${user.chat}`})
+})
+
 app.post('/seeusers', (req, res) => {
     const { adminUser, adminPass } = req.body;
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
@@ -201,6 +222,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
