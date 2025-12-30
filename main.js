@@ -16,8 +16,6 @@ const DATA_FILE_1 = "data.json";
 const DATA_FILE_2 = "chat.json";
 const DATA_FILE_3 = "spam.json"
 
-const BAD_WORDS = readData(DATA_FILE_3)
-
 // ===== Helper functions =====
 function readData(file) {
     if (!fs.existsSync(file)) fs.writeFileSync(file, "[]");
@@ -30,10 +28,14 @@ function isAdmin(user, pass) { return user === ADMIN_CREDENTIALS.username && pas
 function generator() { let n = Math.round(Math.random() * 100000000); return String(n); }
 
 // For spam 
+const BAD_WORDS = readData(DATA_FILE_3);
+
 function containsBadWord(text) {
+  if (typeof text !== 'string') return false;
   const msg = text.toLowerCase();
-  return BAD_WORDS.some(word => msg.includes(word));
+  return Array.isArray(BAD_WORDS) && BAD_WORDS.some(word => msg.includes(word));
 }
+
 
 // ================== REST API ==================
 
@@ -81,19 +83,17 @@ app.post('/appenduser', (req, res) => {
     const { adminUser, adminPass, newUsername, newPassword, newId, newChat } = req.body;
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
     let acc = readData(DATA_FILE_1)
-    user = {
+    let user = {
         username: newUsername,
         password: newPassword,
         id: newId,
-        chat: newChat
+        chat: (newChat === 'false') ? 'false' : 'true'
     }
     if ((newUsername === '' || newUsername === null) || (newPassword === '' || newPassword === null)) 
         return res.json({status: 'error', message: "Ma'lumot noto'g'ri"})
     if (user.id === '' || user.id === null) 
         user.id = generator()
-    if (user.chat === '' || user.chat === null)
-        user.chat = 'true'
-    acc.push(...user)
+    acc.push(user);
     writeData(acc, DATA_FILE_1)
     res.json({status: 'ok', message: `Xisob ochildi: \n ${user.username}  |  ${user.password}  |  ${user.id}  |  ${user.chat}`})
 })
@@ -170,6 +170,11 @@ wss.on('connection', socket => {
           return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo‘q" }));
         }
 
+        if (typeof msgObj.message !== 'string' || !msgObj.message.trim()) {
+          return socket.send(JSON.stringify({ error: "Xabar bo‘sh yoki noto‘g‘ri!" }));
+        }
+  
+          
         // 🚫 BAD WORD CHECK
         if (containsBadWord(msgObj.message)) {
           user.chat = 'false';
@@ -222,6 +227,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
