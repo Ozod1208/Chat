@@ -32,9 +32,28 @@ function writeData(data, file) { fs.writeFileSync(file, JSON.stringify(data, nul
 function isAdmin(user, pass) { return user === ADMIN_CREDENTIALS.username && pass === ADMIN_CREDENTIALS.password; }
 function generator() { let n = Math.round(Math.random() * 100000000); return String(n); }
 
+function getFormattedTime() {
+  const now = new Date();
+
+  // Soat, minut, sekund
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+
+  // Kun, oy (3 harfli), yil
+  const day = now.getDate();
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const month = monthNames[now.getMonth()];
+  const year = now.getFullYear();
+
+  return `${hh}:${mm}:${ss} | ${day}-${month}-${year}`;
+}
+
+console.log(getFormattedTime());
+// Misol: 00:00:01 | 30-Dec-2025
+
+
 // For spam 
-
-
 function containsBadWord(text) {
   if (typeof text !== 'string') return false;
   const BAD_WORDS = readData(DATA_FILE_3);
@@ -158,9 +177,9 @@ app.post('/deletechat', (req, res) => {
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
     let data = [
       {
-            "username": "@Consructor",
-            "message": "Chat yangilandi!",
-            "time": "00:00:01 | 1-Dec-2025"
+            username: "@Constructor",
+            message: "Chat yangilandi!",
+            time: getFormattedTime() 
       }
         ]
     writeData(data, DATA_FILE_2);
@@ -252,6 +271,14 @@ wss.on('connection', socket => {
 });
 
 // Render port
+let data = [
+      {
+            username: "@Constructor",
+            message: "Chat yangilandi!",
+            time: getFormattedTime() 
+      }
+        ]
+    writeData(data, DATA_FILE_2);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
@@ -264,6 +291,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
