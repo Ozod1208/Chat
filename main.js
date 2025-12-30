@@ -137,6 +137,15 @@ app.post('/deleteuser', (req, res) => {
     res.json({ status: 'ok', message: `Hisob o'chirildi!` });
 });
 
+app.post('/appendwordtospam', (req, res) => {
+    const { adminUser, adminPass, word } = req.body;
+    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+    if (word === '' || word === null) return res.json({status: 'error', message: "Noto'g'ri ma'lumot"})
+    let spam = readData(DATA_FILE_3)
+    spam.push(word)
+    res.json({status: 'ok', message: "So'z qo'shildi"})
+})
+
 app.post('/deletechat', (req, res) => {
     const { adminUser, adminPass } = req.body;
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
@@ -227,6 +236,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
