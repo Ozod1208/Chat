@@ -14,6 +14,9 @@ app.use(express.json());
 const ADMIN_CREDENTIALS = { username: "OZOD", password: "12082010" };
 const DATA_FILE_1 = "data.json";
 const DATA_FILE_2 = "chat.json";
+const DATA_FILE_3 = "spam.json"
+
+const BAD_WORDS = readData(DATA_FILE_3)
 
 // ===== Helper functions =====
 function readData(file) {
@@ -25,6 +28,12 @@ function readData(file) {
 function writeData(data, file) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
 function isAdmin(user, pass) { return user === ADMIN_CREDENTIALS.username && pass === ADMIN_CREDENTIALS.password; }
 function generator() { let n = Math.round(Math.random() * 100000000); return String(n); }
+
+// For spam 
+function containsBadWord(text) {
+  const msg = text.toLowerCase();
+  return BAD_WORDS.some(word => msg.includes(word));
+}
 
 // ================== REST API ==================
 
@@ -131,21 +140,50 @@ wss.on('connection', socket => {
     socket.send(JSON.stringify(chat));
 
     socket.on('message', message => {
-        try {
-            const msgObj = JSON.parse(message);
-            const acc = readData(DATA_FILE_1);
-            const user = acc.find(a => a.username === msgObj.username && a.chat === 'true');
-            if (!user) return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo'q" }));
+      try {
+        const msgObj = JSON.parse(message);
+        const acc = readData(DATA_FILE_1);
+        const user = acc.find(a => a.username === msgObj.username);
 
-            const chat = readData(DATA_FILE_2);
-            chat.push({ username: msgObj.username, message: msgObj.message, time: msgObj.time });
-            writeData(chat, DATA_FILE_2);
+        if (!user || user.chat !== 'true') {
+          return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo‘q" }));
+        }
 
-            wss.clients.forEach(client => {
-                if (client.readyState === ws.OPEN) client.send(JSON.stringify({ username: msgObj.username, message: msgObj.message, time: msgObj.time }));
-            });
-        } catch (err) { console.log(err); }
+        // 🚫 BAD WORD CHECK
+        if (containsBadWord(msgObj.message)) {
+          user.chat = 'false';
+          writeData(acc, DATA_FILE_1);
+
+          socket.send(JSON.stringify({
+            error: "❌ Nomaqbul so‘z ishlatildi! Chat huquqingiz o‘chirildi."
+          }));
+
+          return;
+    }
+
+    const chat = readData(DATA_FILE_2);
+    chat.push({
+      username: msgObj.username,
+      message: msgObj.message,
+      time: msgObj.time
     });
+    writeData(chat, DATA_FILE_2);
+
+    wss.clients.forEach(client => {
+      if (client.readyState === ws.OPEN) {
+        client.send(JSON.stringify({
+          username: msgObj.username,
+          message: msgObj.message,
+          time: msgObj.time
+        }));
+      }
+    });
+
+  } catch (err) {
+    console.log(err);
+  }
+});
+
 
     socket.on('close', () => console.log("WS client disconnected"));
 });
@@ -163,6 +201,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
