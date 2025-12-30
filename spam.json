@@ -1,1 +1,19 @@
+[
+  // Uzbek
+  "ahmoq","tentak","jinni","nodon","mol","eshak","cho‘chqa",
+  "it","itvachcha","laqma","kaltafahm", "yaramas","iflos",
+  "onangni","otangni","apangni","skaman","ami","ske","ammangni","naslingni","zotingni","enangni", 
+  "o‘ldiraman","uraman","yo‘q qilaman","sindiraman",
 
+  // Russian
+  "durak","idiot","debil","tupoy","chort",
+  "suka","blyat","pidr","pidar","yeban","dalbayob",
+
+  // English
+  "idiot","stupid","dumb","moron","fool",
+  "fuck","shit","asshole","bitch","bastard","loser",
+
+  // Masked
+  "fuck","","shit","bitch","asshole",
+  "suka","blyat","pidar"
+]
