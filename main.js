@@ -199,7 +199,7 @@ wss.on('connection', socket => {
           let chat = readData(DATA_FILE_2)
           let systemMsg = {
               username: "@Constructor",
-              message: `${msgObj.username} siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi!`,
+              message: `${msgObj.username} bloklandi!\n Aybi -- nomaqbul so'zlar yozmoqchi bo'ldi!`,
               time: msgObj.time
           };
 
@@ -254,6 +254,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
