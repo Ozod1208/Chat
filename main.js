@@ -36,7 +36,8 @@ function getFormattedTime() {
   const now = new Date();
 
   // Soat, minut, sekund
-  const hh = String(now.getHours()).padStart(2, '0');
+  let hh = String(now.getHours()).padStart(2, '0');
+  hh = String(Number(hh) + 5)
   const mm = String(now.getMinutes()).padStart(2, '0');
   const ss = String(now.getSeconds()).padStart(2, '0');
 
@@ -291,6 +292,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
