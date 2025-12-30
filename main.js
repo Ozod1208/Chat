@@ -196,23 +196,33 @@ wss.on('connection', socket => {
           user.chat = 'false';
           writeData(acc, DATA_FILE_1);
 
-          let chat = readData(DATA_FILE_2)
-          let systemMsg = {
-              username: "@Constructor",
-              message: `${msgObj.username} bloklandi!\n Aybi -- nomaqbul so'zlar yozmoqchi bo'ldi!`,
-              time: msgObj.time
+          const systemMsg = {
+            username: "@Constructor",
+            message: `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`,
+            time: msgObj.time
           };
 
+          const chat = readData(DATA_FILE_2);
           chat.push(systemMsg);
           writeData(chat, DATA_FILE_2);
 
-            
-          socket.send(JSON.stringify({
-            error: "❌ Nomaqbul so‘z ishlatildi! Chat huquqingiz o‘chirildi."
-          }));
+          // 🔥 HAMMAGA KO‘RSATISH
+          wss.clients.forEach(client => {
+            if (client.readyState === ws.OPEN) {
+            client.send(JSON.stringify(systemMsg));
+        }
+      });
 
-          return;
-    }
+  // ❌ USERNI UZISH
+  socket.send(JSON.stringify({
+    error: "❌ Siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi."
+  }));
+
+  socket.close(); // 🔴 MUHIM
+
+  return;
+}
+
 
     const chat = readData(DATA_FILE_2);
     chat.push({
@@ -254,6 +264,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
