@@ -11,7 +11,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ADMIN_CREDENTIALS = { username: "OZOD", password: "12082010" };
+const ADMIN_CREDENTIALS = {
+  username: process.env.ADMIN_USER,
+  password: process.env.ADMIN_PASS
+};
+
+
 const DATA_FILE_1 = "data.json";
 const DATA_FILE_2 = "chat.json";
 const DATA_FILE_3 = "spam.json"
@@ -28,10 +33,11 @@ function isAdmin(user, pass) { return user === ADMIN_CREDENTIALS.username && pas
 function generator() { let n = Math.round(Math.random() * 100000000); return String(n); }
 
 // For spam 
-const BAD_WORDS = readData(DATA_FILE_3);
+
 
 function containsBadWord(text) {
   if (typeof text !== 'string') return false;
+  const BAD_WORDS = readData(DATA_FILE_3);
   const msg = text.toLowerCase();
   return Array.isArray(BAD_WORDS) && BAD_WORDS.some(word => msg.includes(word));
 }
@@ -143,13 +149,14 @@ app.post('/appendwordtospam', (req, res) => {
     if (word === '' || word === null) return res.json({status: 'error', message: "Noto'g'ri ma'lumot"})
     let spam = readData(DATA_FILE_3)
     spam.push(word)
+    writeData(spam, DATA_FILE_3)
     res.json({status: 'ok', message: "So'z qo'shildi"})
 })
 
 app.post('/deletechat', (req, res) => {
     const { adminUser, adminPass } = req.body;
     if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    data = [
+    let data = [
       {
             "username": "@Consructor",
             "message": "Chat yangilandi!",
@@ -189,6 +196,17 @@ wss.on('connection', socket => {
           user.chat = 'false';
           writeData(acc, DATA_FILE_1);
 
+          let chat = readData(DATA_FILE_2)
+          let systemMsg = {
+              username: "@Constructor",
+              message: `${msgObj.username} siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi!`,
+              time: msgObj.time
+          };
+
+          chat.push(systemMsg);
+          writeData(chat, DATA_FILE_2);
+
+            
           socket.send(JSON.stringify({
             error: "❌ Nomaqbul so‘z ishlatildi! Chat huquqingiz o‘chirildi."
           }));
@@ -236,6 +254,7 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
 
 
