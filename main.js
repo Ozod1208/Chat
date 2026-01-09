@@ -1,4 +1,4 @@
-// main.js - PostgreSQL bilan to'liq ishlaydigan Node.js server (REST + WebSocket)
+// main.js - Node.js + Neon PostgreSQL + REST + WebSocket
 const express = require('express');
 const ws = require('ws');
 const cors = require('cors');
@@ -10,21 +10,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ===== PostgreSQL Pool =====
+// ===== PostgreSQL Pool (Neon) =====
 const pool = new Pool({
-  user: 'postgres',
-  password: 'K9DeY5f3WdGN4meE',
-  host: 'db.gkyrdqfmurarrtdadzkl.supabase.co', // IPv4 host
-  port: 5432,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false } // yoki ssl: true
+  connectionString: process.env.DATABASE_URL
 });
-
 
 // ===== Admin credentials =====
 const ADMIN_CREDENTIALS = {
-  username: process.env.ADMIN_USER,
-  password: process.env.ADMIN_PASS
+  username: process.env.ADMIN_USER ,
+  password: process.env.ADMIN_PASS 
 };
 
 // ===== Helper functions =====
@@ -33,8 +27,7 @@ function isAdmin(user, pass) {
 }
 
 function generator() {
-  let n = Math.floor(Math.random() * 100000000);
-  return String(n);
+  return String(Math.floor(Math.random() * 100000000));
 }
 
 function getFormattedTime() {
@@ -242,7 +235,4 @@ setInterval(() => {
     console.log('Server pinged at', new Date(), 'Status:', res.statusCode);
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
-
 // Created by Ozod Tirkachev
-
-
