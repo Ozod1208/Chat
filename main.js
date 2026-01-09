@@ -1,6 +1,4 @@
 // main.js - PostgreSQL bilan to'liq ishlaydigan Node.js server (REST + WebSocket)
-
-require('dotenv').config();
 const express = require('express');
 const ws = require('ws');
 const cors = require('cors');
@@ -15,7 +13,7 @@ app.use(express.json());
 // ===== PostgreSQL Pool =====
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: true }
 });
 
 // ===== Admin credentials =====
@@ -241,3 +239,4 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
