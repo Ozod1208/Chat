@@ -12,9 +12,14 @@ app.use(express.json());
 
 // ===== PostgreSQL Pool =====
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: true }
+  user: 'postgres',
+  password: 'K9DeY5f3WdGN4meE',
+  host: 'db.gkyrdqfmurarrtdadzkl.supabase.co', // IPv4 host
+  port: 5432,
+  database: 'postgres',
+  ssl: { rejectUnauthorized: false } // yoki ssl: true
 });
+
 
 // ===== Admin credentials =====
 const ADMIN_CREDENTIALS = {
@@ -239,4 +244,5 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
+
 
