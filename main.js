@@ -1,290 +1,239 @@
-// main.js - Render-ready Node.js server (REST + WebSocket)
+// main.js - PostgreSQL bilan to'liq ishlaydigan Node.js server (REST + WebSocket)
 
+require('dotenv').config();
 const express = require('express');
 const ws = require('ws');
 const cors = require('cors');
-const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const { Pool } = require('pg');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ===== PostgreSQL Pool =====
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// ===== Admin credentials =====
 const ADMIN_CREDENTIALS = {
   username: process.env.ADMIN_USER,
   password: process.env.ADMIN_PASS
 };
 
-
-const DATA_FILE_1 = "data.json";
-const DATA_FILE_2 = "chat.json";
-const DATA_FILE_3 = "spam.json"
-
 // ===== Helper functions =====
-function readData(file) {
-    if (!fs.existsSync(file)) fs.writeFileSync(file, "[]");
-    try { return JSON.parse(fs.readFileSync(file, "utf-8")); } 
-    catch { return []; }
+function isAdmin(user, pass) {
+  return user === ADMIN_CREDENTIALS.username && pass === ADMIN_CREDENTIALS.password;
 }
 
-function writeData(data, file) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
-function isAdmin(user, pass) { return user === ADMIN_CREDENTIALS.username && pass === ADMIN_CREDENTIALS.password; }
-function generator() { let n = Math.round(Math.random() * 100000000); return String(n); }
+function generator() {
+  let n = Math.floor(Math.random() * 100000000);
+  return String(n);
+}
 
 function getFormattedTime() {
   const now = new Date();
-
-  // Soat, minut, sekund
-  let hh = String(now.getHours()).padStart(2, '0');
-  hh = String(Number(hh) + 5)
+  let hh = String(now.getHours() + 5).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
   const ss = String(now.getSeconds()).padStart(2, '0');
-
-  // Kun, oy (3 harfli), yil
   const day = now.getDate();
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const month = monthNames[now.getMonth()];
   const year = now.getFullYear();
-
   return `${hh}:${mm}:${ss} | ${day}-${month}-${year}`;
 }
 
-console.log(getFormattedTime());
-// Misol: 00:00:01 | 30-Dec-2025
-
-
-// For spam 
-function containsBadWord(text) {
+// Bad word check
+async function containsBadWord(text) {
   if (typeof text !== 'string') return false;
-  const BAD_WORDS = readData(DATA_FILE_3);
-  const msg = text.toLowerCase();
-  return Array.isArray(BAD_WORDS) && BAD_WORDS.some(word => msg.includes(word));
+  const r = await pool.query('SELECT word FROM bad_words');
+  const words = r.rows.map(w => w.word.toLowerCase());
+  return words.some(word => text.toLowerCase().includes(word));
 }
-
 
 // ================== REST API ==================
 
 // Get chat
-app.get('/chat', (req, res) => { res.json(readData(DATA_FILE_2)); });
+app.get('/chat', async (req, res) => {
+  const r = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
+  res.json(r.rows);
+});
 
-app.get('/get', (req, res) => { res.json({status: 'ok'}) });
+app.get('/get', (req, res) => res.json({ status: 'ok' }));
 
 // Signup
-app.post('/signup', (req, res) => {
-    const { username, password } = req.body;
-    const acc = readData(DATA_FILE_1);
-    if (!username || !password || acc.find(a => a.username === username)) {
-        return res.json({ status: 'error', message: "Akkaunt allaqachon mavjud yoki noto'g'ri ma'lumot" });
-    }
-    let int = generator();
-    while (acc.find(a => a.id === int) || Number(int) < 10000000) int = generator();
-    acc.push({ ...req.body, id: int, chat: 'true' });
-    writeData(acc, DATA_FILE_1);
-    res.json({ status: 'ok', message: `Yangi hisob ochildi (id = ${int})` });
+app.post('/signup', async (req, res) => {
+  const { username, password } = req.body;
+  const id = generator();
+
+  try {
+    await pool.query(
+      'INSERT INTO users (id, username, password, chat) VALUES ($1,$2,$3,true)',
+      [id, username, password]
+    );
+    res.json({ status: 'ok', message: `Yangi hisob ochildi (id = ${id})` });
+  } catch {
+    res.json({ status: 'error', message: 'Akkaunt allaqachon mavjud yoki noto‘g‘ri ma‘lumot' });
+  }
 });
 
 // Login
-app.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    const acc = readData(DATA_FILE_1);
-    const user = acc.find(a => a.username === username && a.password === password);
-    if (!user) return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto'g'ri ma'lumot" });
-    res.json({ status: 'ok', message: "Hisobga kirdingiz!", id: user.id, chat: user.chat });
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const r = await pool.query(
+    'SELECT id, chat FROM users WHERE username=$1 AND password=$2',
+    [username, password]
+  );
+
+  if (!r.rows.length)
+    return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto‘g‘ri ma‘lumot" });
+
+  res.json({ status: 'ok', message: "Hisobga kirdingiz!", id: r.rows[0].id, chat: r.rows[0].chat });
 });
 
 // Read chat
-app.post('/readchat', (req, res) => {
-    const { username, password } = req.body;
-    const acc = readData(DATA_FILE_1);
-    const user = acc.find(a => a.username === username && a.password === password);
-    if (!user) return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto'g'ri ma'lumot" });
-    if (user.chat !== 'true') return res.json({ status: 'error', message: "Chatga kirish huquqingiz yo'q" });
-    const chat = readData(DATA_FILE_2) || [];
-    res.json({ status: 'ok', message: chat });
+app.post('/readchat', async (req, res) => {
+  const { username, password } = req.body;
+  const r = await pool.query(
+    'SELECT id, chat FROM users WHERE username=$1 AND password=$2',
+    [username, password]
+  );
+
+  if (!r.rows.length)
+    return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto‘g‘ri ma‘lumot" });
+
+  if (!r.rows[0].chat)
+    return res.json({ status: 'error', message: "Chatga kirish huquqingiz yo‘q" });
+
+  const chat = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
+  res.json({ status: 'ok', message: chat.rows });
 });
 
 // ================== Admin REST API ==================
-app.post('/appenduser', (req, res) => {
-    const { adminUser, adminPass, newUsername, newPassword, newId, newChat } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    let acc = readData(DATA_FILE_1)
-    let user = {
-        username: newUsername,
-        password: newPassword,
-        id: newId,
-        chat: (newChat === 'false') ? 'false' : 'true'
-    }
-    if ((newUsername === '' || newUsername === null) || (newPassword === '' || newPassword === null)) 
-        return res.json({status: 'error', message: "Ma'lumot noto'g'ri"})
-    if (user.id === '' || user.id === null) 
-        user.id = generator()
-    acc.push(user);
-    writeData(acc, DATA_FILE_1)
-    res.json({status: 'ok', message: `Xisob ochildi: \n ${user.username}  |  ${user.password}  |  ${user.id}  |  ${user.chat}`})
-})
 
-app.post('/seeusers', (req, res) => {
-    const { adminUser, adminPass } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    res.json({ status: 'ok', message: readData(DATA_FILE_1) });
+// See all users
+app.post('/seeusers', async (req, res) => {
+  const { adminUser, adminPass } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+
+  const r = await pool.query('SELECT username, id, chat FROM users');
+  res.json({ status: 'ok', message: r.rows });
 });
 
-app.post('/rechatuser', (req, res) => {
-    const { adminUser, adminPass, user, pass } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    const acc = readData(DATA_FILE_1);
-    const sser = acc.find(a => a.username === user);
-    if (!sser) return res.json({ status: 'error', message: "Bunday hisob yo'q" });
-    if (pass !== 'true' && pass !== 'false') return res.json({ status: 'error', message: "Bunday argument yo'q" });
-    sser.chat = pass;
-    writeData(acc, DATA_FILE_1);
-    res.json({ status: 'ok', message: `${sser.username} -- ${sser.chat}` });
+// Block/unblock user chat
+app.post('/rechatuser', async (req, res) => {
+  const { adminUser, adminPass, user, pass } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+  if (!['true','false'].includes(pass)) return res.json({ status: 'error', message: "Bunday argument yo'q" });
+
+  await pool.query('UPDATE users SET chat=$1 WHERE username=$2', [pass === 'true', user]);
+  res.json({ status: 'ok', message: `${user} -- ${pass}` });
 });
 
-app.post('/reuser', (req, res) => {
-    const { adminUser, adminPass, user, type, type_name } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    const acc = readData(DATA_FILE_1);
-    const sser = acc.find(a => a.username === user);
-    if (!sser) return res.json({ status: 'error', message: "Bunday hisob yo'q" });
-    if (!['username', 'password', 'id', 'chat'].includes(type)) return res.json({ status: 'error', message: "Bunday argument yo'q" });
-    sser[type] = type_name;
-    writeData(acc, DATA_FILE_1);
-    res.json({ status: 'ok', message: `${type} -- ${type_name}` });
+// Delete user
+app.post('/deleteuser', async (req, res) => {
+  const { adminUser, adminPass, user } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+
+  await pool.query('DELETE FROM users WHERE username=$1', [user]);
+  res.json({ status: 'ok', message: `Hisob o'chirildi!` });
 });
 
-app.post('/deleteuser', (req, res) => {
-    const { adminUser, adminPass, user } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    let acc = readData(DATA_FILE_1);
-    acc = acc.filter(a => a.username !== user);
-    writeData(acc, DATA_FILE_1);
-    res.json({ status: 'ok', message: `Hisob o'chirildi!` });
+// Add bad word
+app.post('/appendwordtospam', async (req, res) => {
+  const { adminUser, adminPass, word } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+
+  if (!word) return res.json({ status: 'error', message: "Noto‘g‘ri ma‘lumot" });
+  await pool.query('INSERT INTO bad_words (word) VALUES ($1) ON CONFLICT DO NOTHING', [word]);
+  res.json({ status: 'ok', message: "So'z qo'shildi" });
 });
 
-app.post('/appendwordtospam', (req, res) => {
-    const { adminUser, adminPass, word } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    if (word === '' || word === null) return res.json({status: 'error', message: "Noto'g'ri ma'lumot"})
-    let spam = readData(DATA_FILE_3)
-    spam.push(word)
-    writeData(spam, DATA_FILE_3)
-    res.json({status: 'ok', message: "So'z qo'shildi"})
-})
+// Delete all chat
+app.post('/deletechat', async (req, res) => {
+  const { adminUser, adminPass } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
 
-app.post('/deletechat', (req, res) => {
-    const { adminUser, adminPass } = req.body;
-    if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-    let data = [
-      {
-            username: "@Constructor",
-            message: "Chat yangilandi!",
-            time: getFormattedTime() 
-      }
-        ]
-    writeData(data, DATA_FILE_2);
-    res.json({ status: 'ok', message: `Chat yangilandi!` });
+  await pool.query('DELETE FROM messages');
+  await pool.query(
+    'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
+    ["@Constructor", "Chat yangilandi!", getFormattedTime()]
+  );
+
+  res.json({ status: 'ok', message: "Chat yangilandi!" });
 });
 
 // ================== HTTP + WebSocket ==================
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
 
-wss.on('connection', socket => {
-    console.log("New WS client connected");
-    const chat = readData(DATA_FILE_2);
-    socket.send(JSON.stringify(chat));
+wss.on('connection', async socket => {
+  console.log("New WS client connected");
 
-    socket.on('message', message => {
-      try {
-        const msgObj = JSON.parse(message);
-        const acc = readData(DATA_FILE_1);
-        const user = acc.find(a => a.username === msgObj.username);
+  const r = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
+  socket.send(JSON.stringify(r.rows));
 
-        if (!user || user.chat !== 'true') {
-          return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo‘q" }));
-        }
+  socket.on('message', async message => {
+    try {
+      const msgObj = JSON.parse(message);
+      const rUser = await pool.query('SELECT chat FROM users WHERE username=$1', [msgObj.username]);
 
-        if (typeof msgObj.message !== 'string' || !msgObj.message.trim()) {
-          return socket.send(JSON.stringify({ error: "Xabar bo‘sh yoki noto‘g‘ri!" }));
-        }
-  
-          
-        // 🚫 BAD WORD CHECK
-        if (containsBadWord(msgObj.message)) {
-          user.chat = 'false';
-          writeData(acc, DATA_FILE_1);
+      if (!rUser.rows.length || !rUser.rows[0].chat) {
+        return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo‘q" }));
+      }
 
-          const systemMsg = {
-            username: "@Constructor",
-            message: `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`,
-            time: msgObj.time
-          };
+      if (typeof msgObj.message !== 'string' || !msgObj.message.trim()) {
+        return socket.send(JSON.stringify({ error: "Xabar bo‘sh yoki noto‘g‘ri!" }));
+      }
 
-          const chat = readData(DATA_FILE_2);
-          chat.push(systemMsg);
-          writeData(chat, DATA_FILE_2);
+      // Bad word check
+      if (await containsBadWord(msgObj.message)) {
+        await pool.query('UPDATE users SET chat=false WHERE username=$1', [msgObj.username]);
+        await pool.query(
+          'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
+          ["@Constructor", `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`, msgObj.time]
+        );
 
-          // 🔥 HAMMAGA KO‘RSATISH
-          wss.clients.forEach(client => {
-            if (client.readyState === ws.OPEN) {
-            client.send(JSON.stringify(systemMsg));
-        }
+        const systemMsg = {
+          username: "@Constructor",
+          message: `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`,
+          time: msgObj.time
+        };
+
+        wss.clients.forEach(client => {
+          if (client.readyState === ws.OPEN) client.send(JSON.stringify(systemMsg));
+        });
+
+        socket.send(JSON.stringify({ error: "❌ Siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi." }));
+        return socket.close();
+      }
+
+      // Insert normal message
+      await pool.query(
+        'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
+        [msgObj.username, msgObj.message, msgObj.time]
+      );
+
+      wss.clients.forEach(client => {
+        if (client.readyState === ws.OPEN) client.send(JSON.stringify(msgObj));
       });
 
-  // ❌ USERNI UZISH
-  socket.send(JSON.stringify({
-    error: "❌ Siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi."
-  }));
+    } catch (err) {
+      console.log(err);
+    }
+  });
 
-  socket.close(); // 🔴 MUHIM
-
-  return;
-}
-
-
-    const chat = readData(DATA_FILE_2);
-    chat.push({
-      username: msgObj.username,
-      message: msgObj.message,
-      time: msgObj.time
-    });
-    writeData(chat, DATA_FILE_2);
-
-    wss.clients.forEach(client => {
-      if (client.readyState === ws.OPEN) {
-        client.send(JSON.stringify({
-          username: msgObj.username,
-          message: msgObj.message,
-          time: msgObj.time
-        }));
-      }
-    });
-
-  } catch (err) {
-    console.log(err);
-  }
+  socket.on('close', () => console.log("WS client disconnected"));
 });
 
-
-    socket.on('close', () => console.log("WS client disconnected"));
-});
-
-// Render port
-let data = [
-      {
-            username: "@Constructor",
-            message: "Chat yangilandi!",
-            time: getFormattedTime() 
-      }
-        ]
-    writeData(data, DATA_FILE_2);
+// Server port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
-// Self-ping for not sleep
-
+// Self-ping
 setInterval(() => {
   https.get('https://chat-uyma.onrender.com/get', res => {
     console.log('Server pinged at', new Date(), 'Status:', res.statusCode);
@@ -292,16 +241,3 @@ setInterval(() => {
 }, 30000);
 
 // Created by Ozod Tirkachev
-
-
-
-
-
-
-
-
-
-
-
-
-
