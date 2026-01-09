@@ -83,8 +83,7 @@ app.post('/login', async (req, res) => {
     const r = await pool.query(
     'SELECT id, chat FROM users WHERE username=$1',
     [username]
-  )};
-  else {
+  )} else {
     const r = await pool.query(
     'SELECT id, chat FROM users WHERE username=$1 AND password=$2',
     [username, password]
@@ -242,4 +241,5 @@ setInterval(() => {
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
 // Created by Ozod Tirkachev
+
 
