@@ -7,7 +7,6 @@ const cors = require('cors');
 const http = require('http');
 const https = require('https');
 const { Pool } = require('pg');
-require('dotenv').config()
 
 const ALLOWED_ORIGIN = 'https://chatforall2026.netlify.app'
 
@@ -336,5 +335,6 @@ setInterval(() => {
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
 // Created by Ozod Tirkachev
+
 
 
