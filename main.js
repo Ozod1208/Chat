@@ -1,24 +1,38 @@
 // main.js - Node.js + Neon PostgreSQL + REST + WebSocket
 const express = require('express');
+const { URL } = require('url');
 const ws = require('ws');
+const bcrypt = require('bcrypt')
 const cors = require('cors');
 const http = require('http');
 const https = require('https');
 const { Pool } = require('pg');
+require('dotenv').config()
+
+const ALLOWED_ORIGIN = 'https://chatforall2026.netlify.app'
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors({
+  origin: ALLOWED_ORIGIN,
+  methods: ['GET', 'POST'],
+  credentials: false
+}));
+
+const onlineUsers = new Set();
 
 // ===== PostgreSQL Pool (Neon) =====
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL
 });
 
+let badWords = [];
+loadBadWords()
+
 // ===== Admin credentials =====
 const ADMIN_CREDENTIALS = {
   username: process.env.ADMIN_USER ,
-  password: process.env.ADMIN_PASS 
+  password: process.env.ADMIN_PASS
 };
 
 // ===== Helper functions =====
@@ -42,113 +56,148 @@ function getFormattedTime() {
   return `${hh}:${mm}:${ss} | ${day}-${month}-${year}`;
 }
 
-// Bad word check
-async function containsBadWord(text) {
-  if (typeof text !== 'string') return false;
+function getISOTime() {
+  return new Date().toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+}
+
+function ban(day=1) {
+  const now = new Date();
+  now.setDate(now.getDate() + day);
+  return now.toISOString();
+}
+
+function isBig(vaqt) {
+  if (!vaqt) return false;
+
+  const banTime = new Date(vaqt);
+  const now = new Date();
+
+  return banTime > now;
+}
+
+
+async function loadBadWords() {
   const r = await pool.query('SELECT word FROM bad_words');
-  const words = r.rows.map(w => w.word.toLowerCase());
-  return words.some(word => text.toLowerCase().includes(word));
+  badWords = r.rows.map(w => w.word.toLowerCase());
+}
+
+
+function containsBadWord(text) {
+  if (typeof text !== 'string') return false;
+  const lower = text.toLowerCase();
+  return badWords.some(word => lower.includes(word));
+}
+
+function broadcastOnlineUsers() {
+  const usersArray = Array.from(onlineUsers);
+  const data = {
+    type: 'onlineUsers',
+    count: usersArray.length,
+    users: usersArray
+  };
+
+  wss.clients.forEach(client => {
+    if (client.readyState === ws.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
 }
 
 // ================== REST API ==================
-
-// Get chat
-app.get('/chat', async (req, res) => {
-  const r = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
-  res.json(r.rows);
-});
 
 app.get('/get', (req, res) => res.json({ status: 'ok' }));
 
 // Signup
 app.post('/signup', async (req, res) => {
   const { username, password } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
   const id = generator();
+  const one_day = ban()
 
   try {
     await pool.query(
-      'INSERT INTO users (id, username, password, chat) VALUES ($1,$2,$3,true)',
-      [id, username, password]
+      'INSERT INTO users (id, username, password, chat, time) VALUES ($1,$2,$3,true, $4)',
+      [id, username, hashedPassword, one_day]
     );
     res.json({ status: 'ok', message: `Yangi hisob ochildi (id = ${id})` });
   } catch {
-    res.json({ status: 'error', message: 'Akkaunt allaqachon mavjud yoki noto‘g‘ri ma‘lumot' });
+    res.json({ status: 'error', message: "Akkaunt allaqachon mavjud yoki noto'g'ri ma'lumot"});
   }
 });
 
 // Login
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  if (password === ADMIN_CREDENTIALS.password) {
-    var r = await pool.query(
-    'SELECT id, chat FROM users WHERE username=$1',
-    [username]
-  )} else {
-    var r = await pool.query(
-    'SELECT id, chat FROM users WHERE username=$1 AND password=$2',
-    [username, password]
-  )};
+
+  var r = await pool.query(
+  'SELECT id, password, chat, time FROM users WHERE username=$1',
+  [username]
+  )
 
   if (!r.rows.length)
-    return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto‘g‘ri ma‘lumot" });
+    return res.json({ status: 'error', message: "Akkaunt mavjud emas!" });
 
-  res.json({ status: 'ok', message: "Hisobga kirdingiz!", id: r.rows[0].id, chat: r.rows[0].chat });
-});
+  const user = r.rows[0]
+  let ok = await bcrypt.compare(password, user.password);
+  if (password === ADMIN_CREDENTIALS.password) { ok = true }
+  if (!ok) return res.json({ status: 'error', message: "Noto'g'ri parol" });
 
-// Read chat
-app.post('/readchat', async (req, res) => {
-  const { username, password } = req.body;
-  const r = await pool.query(
-    'SELECT id, chat FROM users WHERE username=$1 AND password=$2',
-    [username, password]
-  );
-
-  if (!r.rows.length)
-    return res.json({ status: 'error', message: "Akkaunt mavjud emas yoki noto‘g‘ri ma‘lumot" });
-
-  if (!r.rows[0].chat)
-    return res.json({ status: 'error', message: "Chatga kirish huquqingiz yo‘q" });
-
-  const chat = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
-  res.json({ status: 'ok', message: chat.rows });
+  res.json({ status: 'ok', message: "Hisobga kirdingiz!", id: user.id, chat: user.chat, time: user.time });
 });
 
 // ================== Admin REST API ==================
 
 // See all users
-app.post('/seeusers', async (req, res) => {
+app.post('/getusers', async (req, res) => {
   const { adminUser, adminPass } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
 
-  const r = await pool.query('SELECT username, id, chat FROM users');
+  const r = await pool.query('SELECT username, id, chat, time FROM users');
   res.json({ status: 'ok', message: r.rows });
 });
 
 // Block/unblock user chat
-app.post('/rechatuser', async (req, res) => {
-  const { adminUser, adminPass, user, pass } = req.body;
+app.post('/constructchatuser', async (req, res) => {
+  const { adminUser, adminPass, user, pass, time  } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
   if (!['true','false'].includes(pass)) return res.json({ status: 'error', message: "Bunday argument yo'q" });
-
-  await pool.query('UPDATE users SET chat=$1 WHERE username=$2', [pass === 'true', user]);
-  res.json({ status: 'ok', message: `${user} -- ${pass}` });
+  if (time < 1) { return res.json({status: 'error', message:'Vaqt xato kiritilgan' }) }
+  await pool.query('UPDATE users SET chat=$1, time=$2 WHERE username=$3', [pass === 'true', time, user]);
+  res.json({ status: 'ok', message: `${user} -- ${pass} -- ${time}` });
 });
+
+// Construct user
+app.post('/constructuser', async (req, res) => {
+  let { adminUser, adminPass, user, key, value  } = req.body;
+  if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
+  if (!['id', 'username', 'password'].includes(key)) return res.json({ status: 'error', message: "Bunday argument yo'q" });
+  if (key === 'password') { value = await bcrypt.hash(value, 10) }
+  try {
+    await pool.query(`UPDATE users SET ${key}=$1 WHERE username=$2`, [value, user]);
+    res.json({ status: 'ok', message: `${user} -- ${key} -- ${value}` });
+  } catch {
+    res.json({ status: 'ok', message: 'Bunday xisob yo\'q!' });
+  }
+  });
 
 // Delete user
 app.post('/deleteuser', async (req, res) => {
   const { adminUser, adminPass, user } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
-
-  await pool.query('DELETE FROM users WHERE username=$1', [user]);
-  res.json({ status: 'ok', message: `Hisob o'chirildi!` });
+  try {
+    await pool.query('DELETE FROM users WHERE username=$1', [user]);
+    res.json({ status: 'ok', message: `Hisob o'chirildi!` });
+  } catch {
+    res.json({ status: 'ok', message: 'Bunday xisob yo\'q!' });
+  }
 });
 
 // Add bad word
-app.post('/appendwordtospam', async (req, res) => {
+app.post('/addwordtospam', async (req, res) => {
   const { adminUser, adminPass, word } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
 
-  if (!word) return res.json({ status: 'error', message: "Noto‘g‘ri ma‘lumot" });
+  if (!word) return res.json({ status: 'error', message: "Noto'g'ri ma'lumot" });
   await pool.query('INSERT INTO bad_words (word) VALUES ($1) ON CONFLICT DO NOTHING', [word]);
   res.json({ status: 'ok', message: "So'z qo'shildi" });
 });
@@ -171,55 +220,97 @@ app.post('/deletechat', async (req, res) => {
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
 
-wss.on('connection', async socket => {
-  console.log("New WS client connected");
+wss.on('connection', async (socket, req) => {
 
+  const origin = req.headers.origin;
+  if (origin !== ALLOWED_ORIGIN) {
+    socket.close();
+    return;
+  }
+
+  const myURL = new URL(req.url, `https://${req.headers.host}`);
+  const username = myURL.searchParams.get('username');
+
+  if (!username) {
+    socket.send(JSON.stringify({ error: "Iltimos, login qiling!" }));
+    return socket.close();
+  }
+
+  try {
+      const rUser = await pool.query('SELECT chat, time FROM users WHERE username=$1', [username]);
+      const user = rUser.rows[0]
+      if ((!user.chat && isBig(user.time)) || (user.chat && !isBig(user.time))) {
+        socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo'q" }));
+        return socket.close();
+      }
+
+  } catch (err) {
+      console.error("DB Error:", err);
+      return socket.close();
+  }
+
+  socket.currentUser = username;
+  onlineUsers.add(username);
+
+  console.log(`New WS client connected: ${username}`);
+  broadcastOnlineUsers();
+
+  // Tarixni yuborish
   const r = await pool.query('SELECT username, message, time FROM messages ORDER BY pk ASC');
   socket.send(JSON.stringify(r.rows));
 
+
+  // XABAR KELGANDA
   socket.on('message', async message => {
     try {
       const msgObj = JSON.parse(message);
-      const rUser = await pool.query('SELECT chat FROM users WHERE username=$1', [msgObj.username]);
-
-      if (!rUser.rows.length || !rUser.rows[0].chat) {
-        return socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo‘q" }));
-      }
+      const sender = socket.currentUser;
 
       if (typeof msgObj.message !== 'string' || !msgObj.message.trim()) {
-        return socket.send(JSON.stringify({ error: "Xabar bo‘sh yoki noto‘g‘ri!" }));
+        return socket.send(JSON.stringify({ error: "Xabar bo'sh yoki noto'g'ri!" }));
       }
 
       // Bad word check
       if (await containsBadWord(msgObj.message)) {
-        await pool.query('UPDATE users SET chat=false WHERE username=$1', [msgObj.username]);
+        await pool.query('UPDATE users SET chat=false, time=$1 WHERE username=$2',[ban(), sender]);
+
+        const banMsg = `${sender} 1 kunga bloklandi. Sabab: nomaqbul so'z.`;
+
         await pool.query(
           'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
-          ["@Constructor", `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`, msgObj.time]
+          ["@Constructor", banMsg, getFormattedTime()]
         );
 
         const systemMsg = {
           username: "@Constructor",
-          message: `${msgObj.username} bloklandi. Sabab: nomaqbul so‘z.`,
-          time: msgObj.time
+          message: banMsg,
+          time: getFormattedTime()
         };
 
         wss.clients.forEach(client => {
           if (client.readyState === ws.OPEN) client.send(JSON.stringify(systemMsg));
         });
 
-        socket.send(JSON.stringify({ error: "❌ Siz nomaqbul so‘z ishlatdingiz. Chat huquqingiz o‘chirildi." }));
+        socket.send(JSON.stringify({ error: "❌ Siz nomaqbul so'z ishlatdingiz. Chat huquqingiz o'chirildi." }));
         return socket.close();
       }
 
-      // Insert normal message
+      // Oddiy xabarni saqlash
+      // Usernameni msgObj dan emas, sender o'zgaruvchisidan olamiz
       await pool.query(
         'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
-        [msgObj.username, msgObj.message, msgObj.time]
+        [sender, msgObj.message, msgObj.time]
       );
 
+      // Hammaga tarqatishda ham 'sender' ishlatamiz
+      const broadcastMsg = {
+          username: sender,
+          message: msgObj.message,
+          time: msgObj.time
+      };
+
       wss.clients.forEach(client => {
-        if (client.readyState === ws.OPEN) client.send(JSON.stringify(msgObj));
+        if (client.readyState === ws.OPEN) client.send(JSON.stringify(broadcastMsg));
       });
 
     } catch (err) {
@@ -227,7 +318,11 @@ wss.on('connection', async socket => {
     }
   });
 
-  socket.on('close', () => console.log("WS client disconnected"));
+  socket.on('close', () => {
+    onlineUsers.delete(socket.currentUser);
+    console.log(`${socket.currentUser} disconnected`);
+    broadcastOnlineUsers();
+  });
 });
 
 // Server port
@@ -241,6 +336,5 @@ setInterval(() => {
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
 // Created by Ozod Tirkachev
-
 
 
