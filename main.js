@@ -62,11 +62,11 @@ function getTime(vaqt) {
   vaqt = vaqt.split(' ')
   const now = GMT5()
   if (vaqt[1] == 'year') { now.setFullYear(getFullYear + Number(vaqt[0])) }
-  else if (vaqt[1] == 'month') { now.setMonth(getMonth() + Number(vaqt[0])) }
-  else if (vaqt[1] == 'day') { now.setDate(getDate() + Number(vaqt[0])) }
-  else if (vaqt[1] == 'hour') { now.setHours(getHours() + Number(vaqt[0])) }
-  else if (vaqt[1] == 'minute') { now.setMinutes(getMinutes() + Number(vaqt[0])) }
-  else if (vaqt[1] == 'seconds') { now.setSeconds(getSeconds() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'month') { now.setMonth(now.getMonth() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'day') { now.setDate(now.getDate() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'hour') { now.setHours(now.getHours() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'minute') { now.setMinutes(now.getMinutes() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'seconds') { now.setSeconds(now.getSeconds() + Number(vaqt[0])) }
   return now.toISOString()
 }
 
