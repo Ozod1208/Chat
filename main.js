@@ -7,17 +7,10 @@ const cors = require('cors');
 const http = require('http');
 const https = require('https');
 const { Pool } = require('pg');
-require('dotenv').config()
-
-const ALLOWED_ORIGIN = 'https://chatforall2026.netlify.app'
 
 const app = express();
 app.use(express.json());
-app.use(cors({
-  origin: ALLOWED_ORIGIN,
-  methods: ['GET', 'POST'],
-  credentials: false
-}));
+app.use(cors());
 
 const onlineUsers = new Set();
 
@@ -222,12 +215,6 @@ const wss = new ws.Server({ server });
 
 wss.on('connection', async (socket, req) => {
 
-  const origin = req.headers.origin;
-  if (origin !== ALLOWED_ORIGIN) {
-    socket.close();
-    return;
-  }
-
   const myURL = new URL(req.url, `https://${req.headers.host}`);
   const username = myURL.searchParams.get('username');
 
@@ -336,5 +323,6 @@ setInterval(() => {
   }).on('error', err => console.log('Ping error:', err.message));
 }, 30000);
 // Created by Ozod Tirkachev
+
 
 
