@@ -45,6 +45,7 @@ function generator() {
   while (id.length > 8) {
     id = String(Math.floor(Math.random() * 100000000))
   }
+  return id
 }
 
 function getFormattedTime() {
