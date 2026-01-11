@@ -263,7 +263,7 @@ wss.on('connection', async (socket, req) => {
   try {
       const rUser = await pool.query('SELECT chat, time FROM users WHERE username=$1', [username]);
       const user = rUser.rows[0]
-      if ((!user.chat && isBig(user.time)) || (user.chat && !isBig(user.time))) {
+      if ((String(user.chat).lower == 'false' && isBig(user.time)) || (String(user.chat).lower == 'true' && !isBig(user.time))) {
         socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo'q" }));
         return socket.close();
       }
