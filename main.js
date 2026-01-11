@@ -7,6 +7,7 @@ const cors = require('cors');
 const http = require('http');
 const https = require('https');
 const { Pool } = require('pg');
+const { error } = require('console');
 
 const ALLOWED_ORIGIN = 'https://etherchat.netlify.app'
 
@@ -140,7 +141,8 @@ app.post('/signup', async (req, res) => {
       [id, username, hashedPassword, one_day]
     );
     res.json({ status: 'ok', message: `Yangi hisob ochildi (id = ${id})` });
-  } catch {
+  } catch (err) {
+    console.log(err)
     res.json({ status: 'error', message: "Akkaunt allaqachon mavjud yoki noto'g'ri ma'lumot"});
   }
 });
@@ -194,7 +196,8 @@ app.post('/constructuser', async (req, res) => {
   try {
     await pool.query(`UPDATE users SET ${key}=$1 WHERE username=$2`, [value, user]);
     res.json({ status: 'ok', message: `${user} -- ${key} -- ${value}` });
-  } catch {
+  } catch (err) {
+    console.log(err)
     res.json({ status: 'error', message: 'Bunday xisob yo\'q!' });
   }
   });
@@ -206,7 +209,8 @@ app.post('/deleteuser', async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE username=$1', [user]);
     res.json({ status: 'ok', message: `Hisob o'chirildi!` });
-  } catch {
+  } catch (err) {
+    console.log(err)
     res.json({ status: 'error', message: 'Bunday xisob yo\'q!' });
   }
 });
