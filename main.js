@@ -69,7 +69,7 @@ function getTime(vaqt) {
 
 function GMT5() {
   let now = new Date()
-  now.setHours(getHours() + 5)
+  now.setHours(now.getHours() + 5)
   return now
 }
 
