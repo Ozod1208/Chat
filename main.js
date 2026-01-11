@@ -343,7 +343,7 @@ wss.on('connection', async (socket, req) => {
       const broadcastMsg = {
           username: sender,
           message: msgObj.message,
-          time: msgObj.time
+          time: getFormattedTime()
       };
 
       wss.clients.forEach(client => {
