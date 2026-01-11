@@ -55,12 +55,30 @@ function getFormattedTime() {
   return `${hh}:${mm}:${ss} | ${day}-${month}-${year}`;
 }
 
+function getTime(vaqt) {
+  vaqt = vaqt.split(' ')
+  const now = GMT5()
+  if (vaqt[1] == 'year') { now.setFullYear(getFullYear + Number(vaqt[0])) }
+  else if (vaqt[1] == 'month') { now.setMonth(getMonth() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'day') { now.setDate(getDate() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'hour') { now.setHours(getHours() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'minute') { now.setMinutes(getMinutes() + Number(vaqt[0])) }
+  else if (vaqt[1] == 'seconds') { now.setSeconds(getSeconds() + Number(vaqt[0])) }
+  return now.toISOString()
+}
+
+function GMT5() {
+  let now = new Date()
+  now.setHours(getHours() + 5)
+  return now
+}
+
 function getISOTime() {
-  return new Date().toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+  return GMT5().toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
 }
 
 function ban(day=1) {
-  const now = new Date();
+  const now = GMT5();
   now.setDate(now.getDate() + day);
   return now.toISOString();
 }
@@ -69,7 +87,7 @@ function isBig(vaqt) {
   if (!vaqt) return false;
 
   const banTime = new Date(vaqt);
-  const now = new Date();
+  const now = GMT5();
 
   return banTime > now;
 }
@@ -151,7 +169,7 @@ app.post('/getusers', async (req, res) => {
   const { adminUser, adminPass } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
 
-  const r = await pool.query('SELECT username, id, chat, time FROM users');
+  const r = await pool.query('SELECT id, username, chat, time FROM users');
   res.json({ status: 'ok', message: r.rows });
 });
 
@@ -160,8 +178,7 @@ app.post('/constructchatuser', async (req, res) => {
   const { adminUser, adminPass, user, pass, time  } = req.body;
   if (!isAdmin(adminUser, adminPass)) return res.json({ status: 'error', message: 'Kirish noqonuniy!' });
   if (!['true','false'].includes(pass)) return res.json({ status: 'error', message: "Bunday argument yo'q" });
-  if (time < 1) { return res.json({status: 'error', message:'Vaqt xato kiritilgan' }) }
-  await pool.query('UPDATE users SET chat=$1, time=$2 WHERE username=$3', [pass === 'true', time, user]);
+  await pool.query('UPDATE users SET chat=$1, time=$2 WHERE username=$3', [pass === 'true', getTime(time), user]);
   res.json({ status: 'ok', message: `${user} -- ${pass} -- ${time}` });
 });
 
@@ -175,7 +192,7 @@ app.post('/constructuser', async (req, res) => {
     await pool.query(`UPDATE users SET ${key}=$1 WHERE username=$2`, [value, user]);
     res.json({ status: 'ok', message: `${user} -- ${key} -- ${value}` });
   } catch {
-    res.json({ status: 'ok', message: 'Bunday xisob yo\'q!' });
+    res.json({ status: 'error', message: 'Bunday xisob yo\'q!' });
   }
   });
 
@@ -187,7 +204,7 @@ app.post('/deleteuser', async (req, res) => {
     await pool.query('DELETE FROM users WHERE username=$1', [user]);
     res.json({ status: 'ok', message: `Hisob o'chirildi!` });
   } catch {
-    res.json({ status: 'ok', message: 'Bunday xisob yo\'q!' });
+    res.json({ status: 'error', message: 'Bunday xisob yo\'q!' });
   }
 });
 
