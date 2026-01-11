@@ -74,7 +74,7 @@ function getTime(vaqt) {
 
 function GMT5() {
   let now = new Date()
-  now.setHours(now.getHours())
+  now.setHours(now.getHours() + 5)
   return now
 }
 
@@ -336,7 +336,7 @@ wss.on('connection', async (socket, req) => {
       // Usernameni msgObj dan emas, sender o'zgaruvchisidan olamiz
       await pool.query(
         'INSERT INTO messages (username, message, time) VALUES ($1,$2,$3)',
-        [sender, msgObj.message, msgObj.time]
+        [sender, msgObj.message, getFormattedTime()]
       );
 
       // Hammaga tarqatishda ham 'sender' ishlatamiz
