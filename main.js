@@ -287,6 +287,19 @@ wss.on('connection', async (socket, req) => {
   // XABAR KELGANDA
   socket.on('message', async message => {
     try {
+      const rUser = await pool.query('SELECT chat, time FROM users WHERE username=$1', [username]);
+      const user = rUser.rows[0]
+      if ((user.chat && isBig(user.time)) || (user.chat && !isBig(user.time))) {
+        socket.send(JSON.stringify({ error: "Chatga kirish huquqingiz yo'q" }));
+        return socket.close();
+      }
+
+    } catch (err) {
+      console.error("DB Error:", err);
+      return socket.close();
+    }
+
+    try {
       const msgObj = JSON.parse(message);
       const sender = socket.currentUser;
 
@@ -295,7 +308,7 @@ wss.on('connection', async (socket, req) => {
       }
 
       // Bad word check
-      if (await containsBadWord(msgObj.message)) {
+      if (containsBadWord(msgObj.message)) {
         await pool.query('UPDATE users SET chat=false, time=$1 WHERE username=$2',[ban(), sender]);
 
         const banMsg = `${sender} 1 kunga bloklandi. Sabab: nomaqbul so'z.`;
